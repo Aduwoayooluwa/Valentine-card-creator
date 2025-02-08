@@ -447,8 +447,57 @@ const App: React.FC = () => {
     }
   };
 
+  // touch event handlers
+  const onTouchStart = (e: React.TouchEvent, id: string) => {
+    e.preventDefault(); // Prevent scrolling while dragging
+    setDraggingStickerId(id);
+    setSelectedElementId(id);
+    
+    const touch = e.touches[0];
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    setOffset({
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top
+    });
+  };
 
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!draggingStickerId || !designAreaRef.current) return;
+    
+    const touch = e.touches[0];
+    const designRect = designAreaRef.current.getBoundingClientRect();
+    
+    // Update position for both stickers and text elements
+    setStickers((prev: any) =>
+      prev.map((sticker: any) =>
+        sticker.id === draggingStickerId
+          ? {
+              ...sticker,
+              x: touch.clientX - designRect.left - offset.x,
+              y: touch.clientY - designRect.top - offset.y,
+            }
+          : sticker
+      )
+    );
+    
+    setTextElements(prev =>
+      prev.map(txt =>
+        txt.id === draggingStickerId
+          ? {
+              ...txt,
+              x: touch.clientX - designRect.left - offset.x,
+              y: touch.clientY - designRect.top - offset.y,
+            }
+          : txt
+      )
+    );
+  };
 
+  const onTouchEnd = () => {
+    setDraggingStickerId(null);
+    saveToHistory();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br w-full from-pink-300 to-red-300 flex flex-col items-center p-4">
@@ -505,7 +554,9 @@ const App: React.FC = () => {
           className="relative w-full md:w-3/4 h-[500px] rounded-lg shadow-lg overflow-hidden p-2"
           style={getBackgroundStyle(backgroundColor, backgroundTemplate, curveColor)}
           onMouseMove={onMouseMove}
+          onTouchMove={onTouchMove}
           onMouseUp={onMouseUp}
+          onTouchEnd={onTouchEnd}
           onMouseLeave={onMouseUp}
           onClick={onDesignAreaClick}
         >
@@ -524,7 +575,8 @@ const App: React.FC = () => {
                   transform: `scale(${sticker.scale})`,
                   transformOrigin: "top left",
                   zIndex: layer?.zIndex || 0,
-                  ...getAnimationStyle(sticker.animation)
+                  ...getAnimationStyle(sticker.animation),
+                  touchAction: "none" // Prevent browser touch actions
                 }}
               >
                 <img
@@ -532,6 +584,7 @@ const App: React.FC = () => {
                   alt="sticker"
                   className="w-20 h-20 cursor-move select-none"
                   onMouseDown={(e) => onStickerMouseDown(e, sticker.id)}
+                  onTouchStart={(e) => onTouchStart(e, sticker.id)}
                   onContextMenu={(e) => onStickerContextMenu(e, sticker.id)}
                 />
                 {/* Resize handle */}
@@ -551,9 +604,11 @@ const App: React.FC = () => {
               style={{ 
                 left: txt.x, 
                 top: txt.y,
+                touchAction: "none",
                 ...getAnimationStyle(txt.animation)
               }}
               onMouseDown={(e) => onTextMouseDown(e, txt.id)}
+              onTouchStart={(e) => onTouchStart(e, txt.id)}
               onDoubleClick={() =>
                 onTextDoubleClick(
                   txt.id,
