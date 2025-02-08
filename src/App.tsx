@@ -123,7 +123,7 @@ const App: React.FC = () => {
       },
     ]);
     
-    // Add new layer for the sticker
+    // new layer for the sticker
     setLayers((prev: any) => [...prev, {
       id: newStickerId,
       type: 'sticker',
@@ -235,7 +235,7 @@ const App: React.FC = () => {
     
     setTextElements((prev) => [...prev, defaultMessage]);
     
-    // Add new layer for the default message
+    // new layer for the default message
     setLayers((prev: any) => [...prev, {
       id: newId,
       type: 'text',
@@ -439,7 +439,7 @@ const App: React.FC = () => {
   };
 
 
-  // Add click handlers for deselection
+  // click handlers for deselection
   const onDesignAreaClick = (e: React.MouseEvent) => {
     // deselects if clicking directly on the design area  and not on elements
     if (e.target === e.currentTarget) {
