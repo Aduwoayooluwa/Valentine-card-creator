@@ -3,50 +3,36 @@ import React, { useState, useRef, ChangeEvent, useEffect } from "react";
 import { motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import "./index.css";
-import {  HistoryState, TextElement, AnimationType } from "./types/types";
-import { LayersPanel } from "./components/layers-panel";
-import { getAnimationStyle, getBackgroundStyle, stickersLibrary } from "./lib";
-import { ShareOptions } from "./components/share-options";
-import { QuickActionToolbar } from "./components/quick-action-toolbar";
-import { ThemeSelector } from "./components/theme-selector";
-import { useValentine } from "./hooks/use-valentine-context";
-
+import { HistoryState, LayerItem, Sticker, TextElement, AnimationType } from "./types/types";
+import { stickersLibrary } from "./lib";
+import { colorThemes } from "./lib/color-themes";
 
 const App: React.FC = () => {
-
-
-  const {
-    editingTextFontFamily,
-    editingTextId,
-    editingTextFontWeight,
-    editingTextValue,
-    backgroundTemplate,
-    setBackgroundColor,
-    setCurveColor,
-    setEditingTextColor,
-    setEditingTextFontFamily,
-    setEditingTextFontSize,
-    setEditingTextFontWeight,
-    setEditingTextId,
-    setEditingTextValue,
-    setLayers,
-    layers,
-    backgroundColor,
-    curveColor,
-    setBackgroundTemplate,
-    editingTextFontSize,
-    editingTextColor,
-    stickers, redo, setStickers, undo, history, currentHistoryIndex, setHistory, setCurrentHistoryIndex
-  } = useValentine();
   
+  // States for background and stickers
+  const [backgroundColor, setBackgroundColor] = useState<string>("#FFC0CB");
 
-  
+  // New state for curves color (default set to light gray)
+  const [curveColor, setCurveColor] = useState<string>("#ddd");
+
+  const [stickers, setStickers] = useState<Sticker[]>([]);
   const [draggingStickerId, setDraggingStickerId] = useState<string | null>(null);
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // States for text elements with individual style properties
   const [textElements, setTextElements] = useState<TextElement[]>([]);
 
+
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [editingTextValue, setEditingTextValue] = useState<string>("");
+  const [editingTextColor, setEditingTextColor] = useState<string>("");
+  const [editingTextFontSize, setEditingTextFontSize] = useState<number>(0);
+  const [editingTextFontWeight, setEditingTextFontWeight] = useState<string>("");
+  const [editingTextFontFamily, setEditingTextFontFamily] = useState<string>("");
+
+  // State for background template selection
+  type BackgroundTemplate = "plain" | "lines" | "grid" | "curves";
+  const [backgroundTemplate, setBackgroundTemplate] = useState<BackgroundTemplate>("plain");
 
   // State for the context menu used for sticker removal
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; stickerId: string | null; }>({ visible: false, x: 0, y: 0, stickerId: null });
@@ -59,12 +45,18 @@ const App: React.FC = () => {
   // Ref for the design area to calculate offsets and capture image
   const designAreaRef = useRef<HTMLDivElement>(null);
 
+  // Add this new state near the other state declarations
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
+  // Add these states near other state declarations
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState<number>(-1);
 
-
+  // Add these states
+  const [layers, setLayers] = useState<LayerItem[]>([]);
   const [showLayersPanel, setShowLayersPanel] = useState(false);
-  
+
+  // Add this state near other state declarations
   const [showShareOptions, setShowShareOptions] = useState(false);
 
   // Hide context menu when clicking elsewhere
@@ -78,7 +70,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener("click", handleClickOutside);
   }, [contextMenu.visible]);
 
-  // function to save state to history
+  // Add this function to save state to history
   const saveToHistory = () => {
     const newState: HistoryState = {
       stickers: [...stickers],
@@ -92,7 +84,28 @@ const App: React.FC = () => {
     setCurrentHistoryIndex(newHistory.length);
   };
 
-  /** Keyboard shortcut manager */
+  // Add undo/redo functions
+  const undo = () => {
+    if (currentHistoryIndex > 0) {
+      const newIndex = currentHistoryIndex - 1;
+      const previousState = history[newIndex];
+      setStickers(previousState.stickers);
+      setTextElements(previousState.textElements);
+      setCurrentHistoryIndex(newIndex);
+    }
+  };
+
+  const redo = () => {
+    if (currentHistoryIndex < history.length - 1) {
+      const newIndex = currentHistoryIndex + 1;
+      const nextState = history[newIndex];
+      setStickers(nextState.stickers);
+      setTextElements(nextState.textElements);
+      setCurrentHistoryIndex(newIndex);
+    }
+  };
+
+  // Add keyboard shortcut handler
   useEffect(() => {
     const handleKeyboard = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
@@ -108,10 +121,10 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyboard);
   }, [currentHistoryIndex, history]);
 
-  // adding sticker func
+  // --- Sticker Functions ---
   const addSticker = (stickerId: string, src: string) => {
     const newStickerId = stickerId + "-" + Date.now();
-    setStickers((prev: any) => [
+    setStickers((prev) => [
       ...prev,
       {
         id: newStickerId,
@@ -124,7 +137,7 @@ const App: React.FC = () => {
     ]);
     
     // Add new layer for the sticker
-    setLayers((prev: any) => [...prev, {
+    setLayers(prev => [...prev, {
       id: newStickerId,
       type: 'sticker',
       name: `Sticker ${stickerId}`,
@@ -136,9 +149,9 @@ const App: React.FC = () => {
   };
 
   const removeSticker = (id: string) => {
-    setStickers((prev: any) => prev.filter((sticker: any) => sticker.id !== id));
-    // removing from the layers too 
-    setLayers((prev: any) => prev.filter((layer: any) => layer.id !== id));
+    setStickers((prev) => prev.filter((sticker) => sticker.id !== id));
+    // Also remove from layers
+    setLayers(prev => prev.filter(layer => layer.id !== id));
     setContextMenu({ visible: false, x: 0, y: 0, stickerId: null });
     saveToHistory();
   };
@@ -176,16 +189,16 @@ const App: React.FC = () => {
     });
   };
 
-  // func to resize stickers. 
+  // Sticker Resizing Handlers
   const onResizeMouseDown = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setResizingStickerId(id);
     setInitialResizePos({ x: e.clientX, y: e.clientY });
-    const sticker = stickers.find((st: any) => st.id === id);
+    const sticker = stickers.find((st) => st.id === id);
     setInitialScale(sticker ? sticker.scale : 1);
   };
 
-  // adding text elements
+  // --- Text Element Functions ---
   const addTextElement = () => {
     const newId = "text-" + Date.now();
     const newTextElement: TextElement = {
@@ -201,13 +214,13 @@ const App: React.FC = () => {
     
     setTextElements((prev) => [...prev, newTextElement]);
     
-    // Addds new layer for the text element
-    setLayers((prev: any) => [...prev, {
+    // Add new layer for the text element
+    setLayers(prev => [...prev, {
       id: newId,
       type: 'text',
       name: `Text: "${newTextElement.text}"`,
       visible: true,
-      zIndex: prev.length 
+      zIndex: prev.length // New items go on top
     }]);
     
     setEditingTextId(newId);
@@ -236,7 +249,7 @@ const App: React.FC = () => {
     setTextElements((prev) => [...prev, defaultMessage]);
     
     // Add new layer for the default message
-    setLayers((prev: any) => [...prev, {
+    setLayers(prev => [...prev, {
       id: newId,
       type: 'text',
       name: `Text: "Happy Valentine's Day!"`,
@@ -289,7 +302,7 @@ const App: React.FC = () => {
     );
     
     // Update layer name with new text
-    setLayers((prev: any) => prev.map((layer: any) => 
+    setLayers(prev => prev.map(layer => 
       layer.id === id
         ? { ...layer, name: `Text: "${editingTextValue}"` }
         : layer
@@ -308,8 +321,8 @@ const App: React.FC = () => {
       const dy = e.clientY - initialResizePos.y;
       const delta = (dx + dy) / 200;
       const newScale = Math.max(0.2, initialScale + delta);
-      setStickers((prev: any) =>
-        prev.map((sticker: any) =>
+      setStickers((prev) =>
+        prev.map((sticker) =>
           sticker.id === resizingStickerId ? { ...sticker, scale: newScale } : sticker
         )
       );
@@ -317,8 +330,8 @@ const App: React.FC = () => {
     // Otherwise, if dragging is in progress, update sticker/text position
     else if (draggingStickerId && designAreaRef.current) {
       const designRect = designAreaRef.current.getBoundingClientRect();
-      setStickers((prev: any) =>
-        prev.map((sticker: any) =>
+      setStickers((prev) =>
+        prev.map((sticker) =>
           sticker.id === draggingStickerId
             ? {
                 ...sticker,
@@ -347,17 +360,17 @@ const App: React.FC = () => {
     setResizingStickerId(null);
   };
 
-  //  download imahe functionality
+  // --- Handle Share ---
   const downloadImage = async () => {
     if (designAreaRef.current) {
       try {
         const canvas = await html2canvas(designAreaRef.current, {
           backgroundColor: null,
-          scale: 2,
-          useCORS: true,
+          scale: 2, // Higher quality
+          useCORS: true, // Enable cross-origin image loading
         });
         
-       
+        // Create download link
         const link = document.createElement('a');
         link.download = 'valentine-card.png';
         link.href = canvas.toDataURL('image/png');
@@ -426,11 +439,11 @@ const App: React.FC = () => {
           return;
         } catch (error) {
           console.error('Error sharing:', error);
-      
+          // Fall back to other methods if sharing fails
         }
       }
 
-      //  the sharing options will display if the share web API is not avalable. 
+      // If Web Share API is not available or fails, show sharing options
       setShowShareOptions(true);
     } catch (error) {
       console.error('Error generating image:', error);
@@ -438,17 +451,262 @@ const App: React.FC = () => {
     }
   };
 
+  // --- Background Template Styles ---
+  const getBackgroundStyle = () => {
+    // Always include the chosen backgroundColor in the style.
+    const baseStyle = { backgroundColor };
+
+    switch (backgroundTemplate) {
+      case "plain":
+        return baseStyle;
+      case "lines":
+        return {
+          ...baseStyle,
+          backgroundImage: `repeating-linear-gradient(45deg, ${backgroundColor}, ${backgroundColor} 10px, #ddd 10px, #ddd 20px)`,
+        };
+      case "grid":
+        return {
+          ...baseStyle,
+          backgroundImage:
+            "linear-gradient(0deg, transparent 24%, #ddd 25%, #ddd 26%, transparent 27%, transparent 74%, #ddd 75%, transparent 76%), " +
+            "linear-gradient(90deg, transparent 24%, #ddd 25%, #ddd 26%, transparent 27%, transparent 74%, #ddd 75%, transparent 76%)",
+          backgroundSize: "50px 50px",
+        };
+      case "curves":
+        {
+          // Encode the curves color so it is URL-safe
+          const encodedCurveColor = encodeURIComponent(curveColor);
+          return {
+            ...baseStyle,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 200'%3E%3Cpath fill='${encodedCurveColor}' d='M0 100 Q 300 0 600 100 T 600 200 L 0 200 Z'/%3E%3C/svg%3E")`,
+            backgroundSize: "cover",
+          };
+        }
+      default:
+        return baseStyle;
+    }
+  };
+
+  // Add this function after the existing functions
+  const getAnimationStyle = (animation: AnimationType) => {
+    switch (animation) {
+      case 'bounce':
+        return {
+          animation: 'bounce 2s infinite'
+        };
+      case 'pulse':
+        return {
+          animation: 'pulse 1.5s infinite'
+        };
+      case 'shake':
+        return {
+          animation: 'shake 0.5s infinite'
+        };
+      case 'float':
+        return {
+          animation: 'float 3s infinite'
+        };
+      default:
+        return {};
+    }
+  };
+
+  // Add this component near the Additional Options section
+  const ThemeSelector = () => (
+    <div className="flex items-center space-x-2">
+      <label className="block text-white font-medium">Theme:</label>
+      <select
+        onChange={(e) => {
+          const theme = colorThemes[parseInt(e.target.value)];
+          setBackgroundColor(theme.background);
+          setCurveColor(theme.curves);
+        }}
+        className="border-0 rounded p-1"
+      >
+        <option value="">Custom</option>
+        {colorThemes.map((theme, index) => (
+          <option key={theme.name} value={index}>
+            {theme.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  // Add this component
+  const QuickActionToolbar: React.FC<{
+    selectedId: string | null;
+    onDelete: () => void;
+    onAnimate: (animation: AnimationType) => void;
+  }> = ({ selectedId, onDelete, onAnimate }) => {
+    if (!selectedId) return null;
+
+    return (
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex space-x-2">
+        <button
+          onClick={() => onAnimate('bounce')}
+          className="p-2 hover:bg-gray-100 rounded"
+        >
+          🔄 Bounce
+        </button>
+        <button
+          onClick={() => onAnimate('pulse')}
+          className="p-2 hover:bg-gray-100 rounded"
+        >
+          💓 Pulse
+        </button>
+        <button
+          onClick={() => onAnimate('shake')}
+          className="p-2 hover:bg-gray-100 rounded"
+        >
+          📳 Shake
+        </button>
+        <button
+          onClick={() => onAnimate('float')}
+          className="p-2 hover:bg-gray-100 rounded"
+        >
+          🎈 Float
+        </button>
+        <button
+          onClick={() => onAnimate('none')}
+          className="p-2 hover:bg-gray-100 rounded"
+        >
+          ⏹️ Stop
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-2 hover:bg-red-100 text-red-600 rounded"
+        >
+          🗑️ Delete
+        </button>
+      </div>
+    );
+  };
 
   // Add click handlers for deselection
   const onDesignAreaClick = (e: React.MouseEvent) => {
-    // deselects if clicking directly on the design area  and not on elements
+    // Only deselect if clicking directly on the design area (not on elements)
     if (e.target === e.currentTarget) {
       setSelectedElementId(null);
     }
   };
 
+  // Add this component for the layers panel
+  const LayersPanel: React.FC = () => {
+    if (!showLayersPanel) return null;
 
+    return (
+      <div className="absolute right-0 top-0 w-64 bg-white rounded-lg shadow-lg p-4 m-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold">Layers</h3>
+          <button 
+            onClick={() => setShowLayersPanel(false)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            ×
+          </button>
+        </div>
+        <div className="space-y-2">
+          {layers.map((layer, index) => (
+            <div 
+              key={layer.id}
+              className="flex items-center justify-between p-2 bg-gray-50 rounded"
+            >
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => toggleLayerVisibility(layer.id)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  {layer.visible ? '👁️' : '👁️‍🗨️'}
+                </button>
+                <span>{layer.name}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => moveLayer(index, 'up')}
+                  disabled={index === 0}
+                  className="disabled:opacity-50"
+                >
+                  ↑
+                </button>
+                <button
+                  onClick={() => moveLayer(index, 'down')}
+                  disabled={index === layers.length - 1}
+                  className="disabled:opacity-50"
+                >
+                  ↓
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
+  // Add layer management functions
+  const toggleLayerVisibility = (id: string) => {
+    setLayers(prev => prev.map(layer => 
+      layer.id === id ? { ...layer, visible: !layer.visible } : layer
+    ));
+  };
+
+  const moveLayer = (index: number, direction: 'up' | 'down') => {
+    const newLayers = [...layers];
+    if (direction === 'up' && index > 0) {
+      [newLayers[index], newLayers[index - 1]] = [newLayers[index - 1], newLayers[index]];
+    } else if (direction === 'down' && index < newLayers.length - 1) {
+      [newLayers[index], newLayers[index + 1]] = [newLayers[index + 1], newLayers[index]];
+    }
+    
+    // Update z-indexes
+    newLayers.forEach((layer, idx) => {
+      layer.zIndex = idx;
+    });
+    
+    setLayers(newLayers);
+  };
+
+  // Add this component for share options
+  const ShareOptions: React.FC = () => {
+    if (!showShareOptions) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+          <h3 className="text-xl font-bold mb-4">Share Your Card</h3>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                downloadImage();
+                setShowShareOptions(false);
+              }}
+              className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition flex items-center justify-center space-x-2"
+            >
+              <span>💾</span>
+              <span>Download Image</span>
+            </button>
+            <button
+              onClick={() => {
+                copyToClipboard();
+                setShowShareOptions(false);
+              }}
+              className="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition flex items-center justify-center space-x-2"
+            >
+              <span>📋</span>
+              <span>Copy to Clipboard</span>
+            </button>
+          </div>
+          <button
+            onClick={() => setShowShareOptions(false)}
+            className="mt-4 w-full border border-gray-300 py-2 px-4 rounded hover:bg-gray-100 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br w-full from-pink-300 to-red-300 flex flex-col items-center p-4">
@@ -503,15 +761,15 @@ const App: React.FC = () => {
         <div
           ref={designAreaRef}
           className="relative w-full md:w-3/4 h-[500px] rounded-lg shadow-lg overflow-hidden p-2"
-          style={getBackgroundStyle(backgroundColor, backgroundTemplate, curveColor)}
+          style={getBackgroundStyle()}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
           onClick={onDesignAreaClick}
         >
           {/* Render stickers */}
-          {stickers.map((sticker: any) => {
-            const layer = layers.find((lay: any) => (lay).id === sticker.id);
+          {stickers.map((sticker) => {
+            const layer = layers.find(l => l.id === sticker.id);
             if (layer && !layer.visible) return null;
             
             return (
@@ -639,6 +897,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
+      {/* Additional Options */}
       <div className="mt-4 w-full max-w-5xl flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center space-x-2">
@@ -682,23 +941,12 @@ const App: React.FC = () => {
           <ThemeSelector />
         </div>
 
-       <div className="flex items-center space-x-3">
-     
-
         <button
-        onClick={() => setShowLayersPanel(!showLayersPanel)}
-        className="bg-blue-500 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-600 transition"
-      >
-        Layers
-      </button>
-
-      <button
-          className="bg-red-500 text-white px-6 py-2 text-nowrap rounded-lg shadow hover:bg-red-600 transition"
+          className="bg-red-500 text-white px-6 py-2 rounded-lg shadow hover:bg-red-600 transition"
           onClick={handleShare}
         >
           Share Card
         </button>
-       </div>
       </div>
 
       {/* Custom Context Menu for Sticker Removal */}
@@ -743,8 +991,8 @@ const App: React.FC = () => {
                 )
               );
             } else {
-              setStickers((prev: any) =>
-                prev.map((sticker: any) =>
+              setStickers(prev =>
+                prev.map(sticker =>
                   sticker.id === selectedElementId ? { ...sticker, animation } : sticker
                 )
               );
@@ -753,9 +1001,17 @@ const App: React.FC = () => {
         }}
       />
 
-      <LayersPanel showLayersPanel={showLayersPanel} setShowLayersPanel={setShowLayersPanel} />
+      {/* Add this button to the toolbar area */}
+      <button
+        onClick={() => setShowLayersPanel(!showLayersPanel)}
+        className="bg-blue-500 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-600 transition"
+      >
+        Layers
+      </button>
 
-      <ShareOptions showShareOptions={showShareOptions} setShowShareOptions={setShowShareOptions} copyToClipboard={copyToClipboard} downloadImage={downloadImage} />
+      <LayersPanel />
+
+      <ShareOptions />
     </div>
   );
 };

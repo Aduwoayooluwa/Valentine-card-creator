@@ -30,7 +30,9 @@ export type HistoryState = {
   textElements: TextElement[];
 };
 
+// type for the background template
 
+ export type BackgroundTemplate = "plain" | "lines" | "grid" | "curves";
 
 // Add this type for layer items
 export type LayerItem = {
